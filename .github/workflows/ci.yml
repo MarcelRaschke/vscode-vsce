@@ -30,3 +30,25 @@ jobs:
       
       - name: Run tests
         run: npm test
+
+      - name: Install Linux credential-test prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring libsecret-tools
+
+      - name: Test Linux credential migration in an isolated keyring
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          test_home="$(mktemp -d)"
+          trap 'rm -rf "$test_home"' EXIT
+          export HOME="$test_home"
+          export XDG_DATA_HOME="$test_home/.local/share"
+          export XDG_RUNTIME_DIR="$test_home/run"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          export VSCE_TEST_KEYTAR_HOME="$test_home"
+          export VSCE_TEST_KEYTAR_LINUX=1
+          dbus-run-session -- bash -e -c '
+            printf "%s" "vsce-test-keyring" | gnome-keyring-daemon --unlock --components=secrets
+            npm test -- --grep "Native keytar migration \(Linux\)"
+          '
